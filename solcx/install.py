@@ -148,7 +148,10 @@ def import_installed_solc(solcx_binary_path: Union[Path, str] = None) -> List[Ve
             copy_path.mkdir()
             copy_path = copy_path.joinpath("solc.exe")
 
-        shutil.copy(path, copy_path)
+        if _get_os_name() != "windows":
+            os.symlink(path, copy_path)
+        else:
+            shutil.copy(path, copy_path)
         try:
             # confirm that solc still works after being copied
             assert version == wrapper._get_solc_version(copy_path)

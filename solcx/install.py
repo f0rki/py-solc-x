@@ -135,13 +135,38 @@ def import_installed_solc(solcx_binary_path: Union[Path, str] = None) -> List[Ve
     if solcselect_artifacts.exists():
         path_list.extend(solcselect_artifacts.glob("solc-*"))
 
+    # if solc-select is installed, try to import versions previously installed with it
+    solcselect_artifacts = Path("~").expanduser() / ".solc-select" / "artifacts"
+    if solcselect_artifacts.exists():
+        for path in solcselect_artifacts.glob("solc-*"):
+            if path.is_dir():
+                # handle newer solc-select versions, where each solc version has its own directory.
+                p = path / "solc"
+                if p.exists():
+                    path_list.append(p)
+                path_list.extend(path.glob("solc-*"))
+            else:
+                # handle older solc-select versions, which put all solc binaries in a single directory
+                path_list.append(path)
+
     # on OSX, also copy all versions of solc from cellar
     if _get_os_name() == "macosx":
         path_list.extend(Path("/usr/local/Cellar").glob("solidity*/**/solc"))
 
     imported_versions = []
     for path in path_list:
+        # sanity check
+        if (not path.exists()) or path.is_dir():
+            continue
         try:
+            # we do not want to copy other solc wrappers, such as the one provided
+            # by e.g., solc-select. We check if the provided solc binary is a shell
+            # or python script.
+            with path.open("rb") as f:
+                data = f.read(200)
+                if data.startswith(b"#!/usr/bin/") or data.startswith(b"#!/bin/") or b"solc_select" in data:
+                    continue
+
             version = wrapper._get_solc_version(path)
             assert version not in get_installed_solc_versions()
         except Exception:
